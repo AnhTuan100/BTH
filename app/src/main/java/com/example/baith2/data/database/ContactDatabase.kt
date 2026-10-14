@@ -11,7 +11,7 @@ import com.example.baith2.data.entity.PhoneNumberEntity
 
 @Database(
     entities = [ContactEntity::class, PhoneNumberEntity::class, MessageEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class ContactDatabase : RoomDatabase() {

@@ -41,4 +41,24 @@ interface ContactDao {
 
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteMessageById(messageId: Long)
+
+    // ── Sync helpers ──────────────────────────────────────────────────────────
+
+    /** Tìm liên hệ nội bộ theo systemContactId đã lưu */
+    @Transaction
+    @Query("SELECT * FROM contacts WHERE systemContactId = :systemId LIMIT 1")
+    suspend fun getContactBySystemId(systemId: Long): ContactWithPhones?
+
+    /** Lấy toàn bộ danh sách để so sánh khi sync ngược lại */
+    @Transaction
+    @Query("SELECT * FROM contacts")
+    suspend fun getAllContactsSnapshot(): List<ContactWithPhones>
+
+    /** Upsert (insert-or-replace) dùng khi import từ hệ thống */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertContact(contact: ContactEntity): Long
+
+    /** Upsert nhiều số điện thoại cùng lúc */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPhoneNumbers(phones: List<PhoneNumberEntity>)
 }

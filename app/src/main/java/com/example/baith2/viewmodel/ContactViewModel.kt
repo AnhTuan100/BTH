@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 class ContactViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: ContactRepository = ContactRepository(
-        ContactDatabase.getDatabase(application).contactDao()
+        dao = ContactDatabase.getDatabase(application).contactDao(),
+        context = application          // truyền context để sync helper dùng ContentResolver
     )
 
     private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
@@ -27,6 +28,19 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // ── Trạng thái đồng bộ ────────────────────────────────────────────────────
+    enum class SyncState { IDLE, SYNCING, SUCCESS, ERROR }
+
+    data class SyncResult(
+        val state: SyncState = SyncState.IDLE,
+        val imported: Int = 0,
+        val exported: Int = 0,
+        val errorMessage: String = ""
+    )
+
+    private val _syncResult = MutableStateFlow(SyncResult())
+    val syncResult: StateFlow<SyncResult> = _syncResult.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -90,4 +104,36 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
             repository.deleteMessage(messageId)
         }
     }
+
+    // ── Đồng bộ với Danh bạ hệ thống ─────────────────────────────────────────
+
+    /**
+     * Chạy đồng bộ 2 chiều trong coroutine scope của ViewModel.
+     * Cập nhật [syncResult] trong suốt quá trình để UI phản ánh.
+     */
+    fun syncWithSystemContacts() {
+        if (_syncResult.value.state == SyncState.SYNCING) return   // tránh chạy đồng thời
+        viewModelScope.launch {
+            _syncResult.value = SyncResult(state = SyncState.SYNCING)
+            try {
+                val (imported, exported) = repository.syncBidirectional()
+                _syncResult.value = SyncResult(
+                    state = SyncState.SUCCESS,
+                    imported = imported,
+                    exported = exported
+                )
+            } catch (e: Exception) {
+                _syncResult.value = SyncResult(
+                    state = SyncState.ERROR,
+                    errorMessage = e.message ?: "Lỗi không xác định"
+                )
+            }
+        }
+    }
+
+    /** Reset kết quả sync về IDLE (sau khi UI đã hiển thị thông báo) */
+    fun resetSyncResult() {
+        _syncResult.value = SyncResult()
+    }
 }
+
